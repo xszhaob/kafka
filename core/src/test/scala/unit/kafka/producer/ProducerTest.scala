@@ -55,12 +55,14 @@ class ProducerTest extends JUnitSuite {
     // set up 2 brokers with 4 partitions each
     zkServer = new EmbeddedZookeeper(TestZKUtils.zookeeperConnect)
 
+    // 第一个broker
     val props1 = TestUtils.createBrokerConfig(brokerId1, port1)
     val config1 = new KafkaConfig(props1) {
       override val numPartitions = 4
     }
     server1 = TestUtils.createServer(config1)
 
+    // 第二个broker
     val props2 = TestUtils.createBrokerConfig(brokerId2, port2)
     val config2 = new KafkaConfig(props2) {
       override val numPartitions = 4

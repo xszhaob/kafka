@@ -50,11 +50,15 @@ class SocketServer(val port: Int,
    * Start the socket server
    */
   def startup() {
+    // 处理消息请求的线程
     for(i <- 0 until numProcessorThreads) {
       processors(i) = new Processor(handlerFactory, time, stats, maxRequestSize)
       Utils.newThread("kafka-processor-" + i, processors(i), false).start()
     }
+
+    // 接收消息的线程初始化
     Utils.newThread("kafka-acceptor", acceptor, false).start()
+    // 接收消息的线程需要等带processors线程初始化完成之后才能开始接收消息
     acceptor.awaitStartup
   }
 
@@ -195,6 +199,7 @@ private[kafka] class Processor(val handlerMapping: Handler.HandlerMapping,
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
   override def run() {
+    // 标识请求处理线程初始化完成
     startupComplete()
     while(isRunning) {
       // setup any new connections that have been queued up
@@ -265,6 +270,7 @@ private[kafka] class Processor(val handlerMapping: Handler.HandlerMapping,
       val channel = newConnections.poll()
       if(logger.isDebugEnabled())
         logger.debug("Listening to new connection from " + channel.socket.getRemoteSocketAddress)
+      // NIO模式
       channel.register(selector, SelectionKey.OP_READ)
     }
   }

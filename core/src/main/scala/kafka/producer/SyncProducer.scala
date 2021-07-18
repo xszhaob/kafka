@@ -87,6 +87,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
    */
   private def send(send: BoundedByteBufferSend) {
     lock synchronized {
+      // 验证消息长度
       verifySendBuffer(send.buffer.slice)
       val startTime = SystemTime.nanoseconds
       getOrMakeConnection()
@@ -119,6 +120,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
    * Send a message
    */
   def send(topic: String, partition: Int, messages: ByteBufferMessageSet) {
+    // 验证消息长度
     messages.verifyMessageSize(config.maxMessageSize)
     val setSize = messages.sizeInBytes.asInstanceOf[Int]
     trace("Got message set with " + setSize + " bytes to send")

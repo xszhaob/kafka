@@ -227,7 +227,8 @@ private[log] class Log(val dir: File, val time: Time, val maxSize: Long, val max
     BrokerTopicStat.getBrokerAllTopicStat.recordMessagesIn(numberOfMessages)
     logStats.recordAppendedMessages(numberOfMessages)
 
-    // truncate the message set's buffer upto validbytes, before appending it to the on-disk log
+    // truncate the message set's buffer up to valid bytes, before appending it to the on-disk log
+    // 在将消息追加到磁盘之前，将消息集的缓冲区截断为有效字节
     val validByteBuffer = messages.getBuffer.duplicate()
     val messageSetValidBytes = messages.validBytes
     if(messageSetValidBytes > Int.MaxValue || messageSetValidBytes < 0)
