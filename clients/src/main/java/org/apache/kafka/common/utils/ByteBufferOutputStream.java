@@ -47,7 +47,7 @@ public class ByteBufferOutputStream extends OutputStream {
      *
      * Prefer one of the constructors that allocate the internal buffer for clearer semantics.
      */
-    public ByteBufferOutputStream(ByteBuffer buffer) {
+    public   ByteBufferOutputStream(ByteBuffer buffer) {
         this.buffer = buffer;
         this.initialPosition = buffer.position();
         this.initialCapacity = buffer.capacity();

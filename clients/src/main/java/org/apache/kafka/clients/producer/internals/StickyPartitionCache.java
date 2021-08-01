@@ -51,12 +51,13 @@ public class StickyPartitionCache {
         // triggered the new batch matches the sticky partition that needs to be changed.
         if (oldPart == null || oldPart == prevPartition) {
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
+            // 无可用分区，在所有分区中找一个不可用的分区
             if (availablePartitions.size() < 1) {
                 Integer random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
                 newPart = random % partitions.size();
-            } else if (availablePartitions.size() == 1) {
+            } else if (availablePartitions.size() == 1) {// 可用分区数等于1，使用该分区
                 newPart = availablePartitions.get(0).partition();
-            } else {
+            } else {// 可用分区数大于1，均匀使用每个分区
                 while (newPart == null || newPart.equals(oldPart)) {
                     Integer random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
                     newPart = availablePartitions.get(random % availablePartitions.size()).partition();

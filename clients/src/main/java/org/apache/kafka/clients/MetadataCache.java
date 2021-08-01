@@ -47,6 +47,7 @@ public class MetadataCache {
     private final Set<String> unauthorizedTopics;
     private final Set<String> invalidTopics;
     private final Set<String> internalTopics;
+    // TODO: 2021/7/31 这个控制节点是干什么的？
     private final Node controller;
     private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
 
@@ -83,6 +84,7 @@ public class MetadataCache {
         }
 
         if (clusterInstance == null) {
+            // 根据clusterId、节点id、各种topic集合、控制器节点等组装出一个cluster视图
             computeClusterView();
         } else {
             this.clusterInstance = clusterInstance;

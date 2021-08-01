@@ -80,6 +80,7 @@ public class Sender implements Runnable {
     private final ProducerMetadata metadata;
 
     /* the flag indicating whether the producer should guarantee the message order on the broker or not. */
+    // 发送中的数据为1时，表示需要保证消息的顺序
     private final boolean guaranteeMessageOrder;
 
     /* the maximum request size to attempt to send to the server */
@@ -293,6 +294,7 @@ public class Sender implements Runnable {
      *
      */
     void runOnce() {
+        // 生产者事务相关的处理
         if (transactionManager != null) {
             try {
                 transactionManager.maybeResolveSequences();
@@ -321,16 +323,21 @@ public class Sender implements Runnable {
         }
 
         long currentTimeMs = time.milliseconds();
+
+        //
         long pollTimeout = sendProducerData(currentTimeMs);
         client.poll(pollTimeout, currentTimeMs);
     }
 
     private long sendProducerData(long now) {
+        // 步骤一、获取元数据
         Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
+        // 步骤二、获取已经准备好可以发送消息的分区
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
         // if there are any partitions whose leaders are not known yet, force metadata update
+        // 步骤三、针对没有获取到leader的topic+partition，做一次元数据的更新
         if (!result.unknownLeaderTopics.isEmpty()) {
             // The set of topics with unknown leader contains topics with leader election pending as well as
             // topics which may have expired. Add the topic again to metadata to ensure it is included
@@ -344,6 +351,7 @@ public class Sender implements Runnable {
         }
 
         // remove any nodes we aren't ready to send to
+        // 把没有建立好网络链接的node节点给删除掉
         Iterator<Node> iter = result.readyNodes.iterator();
         long notReadyTimeout = Long.MAX_VALUE;
         while (iter.hasNext()) {

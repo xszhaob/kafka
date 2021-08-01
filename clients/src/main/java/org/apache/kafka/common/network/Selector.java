@@ -57,6 +57,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A nioSelector interface for doing non-blocking multi-connection network I/O.
+ * 用于执行非阻塞多链接网络I/O的nioSelector接口
  * <p>
  * This class works with {@link NetworkSend} and {@link NetworkReceive} to transmit size-delimited network requests and
  * responses.

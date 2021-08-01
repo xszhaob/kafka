@@ -260,6 +260,7 @@ public class Metadata implements Closeable {
 
         this.needPartialUpdate = requestVersion < this.requestVersion;
         this.lastRefreshMs = nowMs;
+        // 更新元数据的版本号
         this.updateVersion += 1;
         if (!isPartialUpdate) {
             this.needFullUpdate = false;
@@ -358,6 +359,7 @@ public class Metadata implements Closeable {
                 unauthorizedTopics, invalidTopics, internalTopics, metadataResponse.controller(),
                 (topic, isInternal) -> !topics.contains(topic) && retainTopic(topic, isInternal, nowMs));
         else
+            // 全量更新时
             return new MetadataCache(metadataResponse.clusterId(), nodes, partitions,
                 unauthorizedTopics, invalidTopics, internalTopics, metadataResponse.controller());
     }

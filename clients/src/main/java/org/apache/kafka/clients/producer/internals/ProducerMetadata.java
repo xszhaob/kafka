@@ -36,7 +36,7 @@ public class ProducerMetadata extends Metadata {
     // If a topic hasn't been accessed for this many milliseconds, it is removed from the cache.
     private final long metadataIdleMs;
 
-    /* Topics with expiry time */
+    /* Topics with expiry time ，<topic,过期时间>*/
     private final Map<String, Long> topics = new HashMap<>();
     private final Set<String> newTopics = new HashSet<>();
     private final Logger log;
@@ -119,6 +119,7 @@ public class ProducerMetadata extends Metadata {
         time.waitObject(this, () -> {
             // Throw fatal exceptions, if there are any. Recoverable topic errors will be handled by the caller.
             maybeThrowFatalException();
+            // 如果最新的版本比记录的最后一个版本新 或 元数据信息被关闭，跳出waiteObject
             return updateVersion() > lastVersion || isClosed();
         }, deadlineMs);
 
@@ -138,6 +139,7 @@ public class ProducerMetadata extends Metadata {
             }
         }
 
+        // 唤醒等着获取元数据信息的metadata。ProducerMetadata.awaitUpdate
         notifyAll();
     }
 

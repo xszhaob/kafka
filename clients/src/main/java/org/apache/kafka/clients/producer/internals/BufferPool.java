@@ -24,6 +24,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.kafka.clients.producer.BufferExhaustedException;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
@@ -41,17 +42,32 @@ import org.apache.kafka.common.utils.Time;
  * prevents starvation or deadlock when a thread asks for a large chunk of memory and needs to block until multiple
  * buffers are deallocated.
  * </ol>
+ * 总可用内存是 nonPooledAvailableMemory 和 free * poolableSize 中的字节缓冲区数的总和
  */
 public class BufferPool {
 
     static final String WAIT_TIME_SENSOR_NAME = "bufferpool-wait-time";
 
     private final long totalMemory;
+    /**
+     * 内存池中每个内存块的大小，使用的是批次大小的配置
+     * @see ProducerConfig#BATCH_SIZE_CONFIG
+     */
     private final int poolableSize;
     private final ReentrantLock lock;
+    /**
+     * 空闲的内存块池，本质上是一个队列
+     */
     private final Deque<ByteBuffer> free;
+    /**
+     * 等待申请内存的队列，等待中的对象遵循先到先得内存的规则
+     */
     private final Deque<Condition> waiters;
-    /** Total available memory is the sum of nonPooledAvailableMemory and the number of byte buffers in free * poolableSize.  */
+    /**
+     * Total available memory is the sum of nonPooledAvailableMemory and the number of byte buffers in free * poolableSize.
+     * 未池化的可用内存大小。
+     * 总可用内存是 nonPooledAvailableMemory 和 free * poolableSize 中的字节缓冲区数的总和。
+     */
     private long nonPooledAvailableMemory;
     private final Metrics metrics;
     private final Time time;
@@ -99,6 +115,7 @@ public class BufferPool {
      *
      * @param size The buffer size to allocate in bytes
      * @param maxTimeToBlockMs The maximum time in milliseconds to block for buffer memory to be available
+     *                         这里的最大阻塞时间是消息发送过程中，除了前面已经消耗的时间之外还剩余的阻塞时间
      * @return The buffer
      * @throws InterruptedException If the thread is interrupted while blocked
      * @throws IllegalArgumentException if size is larger than the total memory controlled by the pool (and hence we would block
@@ -121,22 +138,28 @@ public class BufferPool {
 
         try {
             // check if we have a free buffer of the right size pooled
+            // 如果要申请的内存刚好和内存池中每个内存块的大小相等，并且有空闲的内存块，直接返回使用
             if (size == poolableSize && !this.free.isEmpty())
                 return this.free.pollFirst();
 
             // now check if the request is immediately satisfiable with the
             // memory on hand or if we need to block
+            // 空闲内存的大小 = 空闲内存块数 * 每个内存块大小
             int freeListSize = freeSize() * this.poolableSize;
+            // 如果现在总的可用内存 大于 申请的内存，则分配内存并返回
             if (this.nonPooledAvailableMemory + freeListSize >= size) {
                 // we have enough unallocated or pooled memory to immediately
                 // satisfy the request, but need to allocate the buffer
+                // 尝试增加未池化的可用内存大小
                 freeUp(size);
+                // 可用内存减少
                 this.nonPooledAvailableMemory -= size;
-            } else {
+            } else {// 要申请的内存比现有可用内存大的情况下。比如可用内存只有4kb，需要申请16kb
                 // we are out of memory and will have to block
                 int accumulated = 0;
                 Condition moreMemory = this.lock.newCondition();
                 try {
+                    // 这里的最大阻塞时间是消息发送过程中，除了前面已经消耗的时间之外还剩余的阻塞时间
                     long remainingTimeToBlockNs = TimeUnit.MILLISECONDS.toNanos(maxTimeToBlockMs);
                     this.waiters.addLast(moreMemory);
                     // loop over and over until we have a buffer or have reserved
@@ -146,6 +169,7 @@ public class BufferPool {
                         long timeNs;
                         boolean waitingTimeElapsed;
                         try {
+                            // 在等待时间耗尽的情况下返回false，其他情况下返回true（比如被唤醒）
                             waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
                         } finally {
                             long endWaitNs = time.nanoseconds();
@@ -156,6 +180,7 @@ public class BufferPool {
                         if (this.closed)
                             throw new KafkaException("Producer closed while allocating memory");
 
+                        // 如果已经达到最大阻塞时间仍旧没有获取到内存，则抛出异常
                         if (waitingTimeElapsed) {
                             this.metrics.sensor("buffer-exhausted-records").record();
                             throw new BufferExhaustedException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
@@ -165,23 +190,32 @@ public class BufferPool {
 
                         // check if we can satisfy this request from the free list,
                         // otherwise allocate memory
+                        // 在block过程尚未获取到内存 且 要申请的内存和内存池中内存块大小相等 且 内存池中有空闲内存块
                         if (accumulated == 0 && size == this.poolableSize && !this.free.isEmpty()) {
                             // just grab a buffer from the free list
                             buffer = this.free.pollFirst();
+                            // 设置条件，退出循环
                             accumulated = size;
                         } else {
                             // we'll need to allocate memory, but we may only get
                             // part of what we need on this iteration
+                            // 尝试获取内存
                             freeUp(size - accumulated);
+                            // 计算在本轮循环中获取到内存，在本轮想要获取的内存和可用内存中取最小值
                             int got = (int) Math.min(size - accumulated, this.nonPooledAvailableMemory);
+                            // 可用内存减少
                             this.nonPooledAvailableMemory -= got;
+                            // 已获取内存增加
                             accumulated += got;
                         }
                     }
                     // Don't reclaim memory on throwable since nothing was thrown
+                    // 如果代码可以执行到这一步，说明已经申请内存成功了，因此需要把accumulated置为0，
+                    // 避免在接下来的finally把可用内存又增加了，造成内存泄漏
                     accumulated = 0;
                 } finally {
                     // When this loop was not able to successfully terminate don't loose available memory
+                    // 如果在阻塞等待获取内存的过程中，申请到了内存，则需要把这一部分已经申请到的内存回收掉
                     this.nonPooledAvailableMemory += accumulated;
                     this.waiters.remove(moreMemory);
                 }
@@ -190,6 +224,7 @@ public class BufferPool {
             // signal any additional waiters if there is more memory left
             // over for them
             try {
+                // 如果有可用内存，并且在等待获取内存队列不为空，则唤醒等待获取内存的对象（是一个Condition对象）
                 if (!(this.nonPooledAvailableMemory == 0 && this.free.isEmpty()) && !this.waiters.isEmpty())
                     this.waiters.peekFirst().signal();
             } finally {
@@ -199,6 +234,7 @@ public class BufferPool {
         }
 
         if (buffer == null)
+            // 真正的分配内存操作，如果分配内存过程中报错并且等待申请内存的队列不为空，也会唤醒正在等待获取内存的对象（是一个Condition对象）
             return safeAllocateByteBuffer(size);
         else
             return buffer;
@@ -220,6 +256,7 @@ public class BufferPool {
             error = false;
             return buffer;
         } finally {
+            // 如果分配内存过程中报错并且等待申请内存的队列不为空，也会唤醒正在等待获取内存的对象（是一个Condition对象）
             if (error) {
                 this.lock.lock();
                 try {
@@ -258,12 +295,14 @@ public class BufferPool {
     public void deallocate(ByteBuffer buffer, int size) {
         lock.lock();
         try {
+            // 如果归还的内存大小等于内存块的标准大小，并且归还的内存大小等于归还内存块的容量，则加入到内存块池中
             if (size == this.poolableSize && size == buffer.capacity()) {
                 buffer.clear();
                 this.free.add(buffer);
             } else {
                 this.nonPooledAvailableMemory += size;
             }
+            // 等待申请内存的队列不为空，则唤醒
             Condition moreMem = this.waiters.peekFirst();
             if (moreMem != null)
                 moreMem.signal();

@@ -69,7 +69,10 @@ public class ProducerConfig extends AbstractConfig {
             "time since a topic was last produced to exceeds the metadata idle duration, then the topic's " +
             "metadata is forgotten and the next access to it will force a metadata fetch request.";
 
-    /** <code>batch.size</code> */
+    /**
+     * <code>batch.size</code>
+     * 每个批量发送消息的大小限制。
+     */
     public static final String BATCH_SIZE_CONFIG = "batch.size";
     private static final String BATCH_SIZE_DOC = "The producer will attempt to batch records together into fewer requests whenever multiple records are being sent"
                                                  + " to the same partition. This helps performance on both the client and the server. This configuration controls the "

@@ -114,6 +114,7 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     private final String id;
+    // 继承了NIO的channel
     private final TransportLayer transportLayer;
     private final Supplier<Authenticator> authenticatorCreator;
     private Authenticator authenticator;

@@ -97,10 +97,13 @@ public final class ProducerBatch {
 
     /**
      * Append the record to the current record set and return the relative offset within that record set
+     * 把消息追加到当前消息记录集合中，并返回在消息集合中的相对偏移量
      *
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
+     * 返回该消息对应的RecordSend，如果记录集合已经没有空间则返回null
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
+        // 如果已经没有空间可用，直接返回null
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return null;
         } else {
