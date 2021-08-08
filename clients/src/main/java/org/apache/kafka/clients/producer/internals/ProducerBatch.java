@@ -197,6 +197,7 @@ public final class ProducerBatch {
         }
 
         if (this.finalState.compareAndSet(null, tryFinalState)) {
+            // 在这里完成回调
             completeFutureAndFireCallbacks(baseOffset, logAppendTime, exception);
             return true;
         }
@@ -223,14 +224,18 @@ public final class ProducerBatch {
         produceFuture.set(baseOffset, logAppendTime, exception);
 
         // execute callbacks
+        // thunk封装了每个消息的future和callback
         for (Thunk thunk : thunks) {
             try {
+                // 没有异常的情况
                 if (exception == null) {
                     RecordMetadata metadata = thunk.future.value();
                     if (thunk.callback != null)
+                        // 把该消息对应的元数据信息返回
                         thunk.callback.onCompletion(metadata, null);
                 } else {
                     if (thunk.callback != null)
+                        // 把异常信息返回
                         thunk.callback.onCompletion(null, exception);
                 }
             } catch (Exception e) {
@@ -333,6 +338,7 @@ public final class ProducerBatch {
     }
 
     boolean hasReachedDeliveryTimeout(long deliveryTimeoutMs, long now) {
+        // 从消息的创建时间到现在 超过 投递超时时间
         return deliveryTimeoutMs <= now - this.createdMs;
     }
 

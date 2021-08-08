@@ -271,11 +271,13 @@ public class NetworkClient implements KafkaClient {
         if (node.isEmpty())
             throw new IllegalArgumentException("Cannot connect to empty node " + node);
 
+        // 如果已经具备发送消息的条件
         if (isReady(node, now))
             return true;
-
+        // 是否可以建立连接
         if (connectionStates.canConnect(node.idString(), now))
             // if we are interested in sending to a node and we don't have a connection to it, initiate one
+            // 建立连接
             initiateConnect(node, now);
 
         return false;
@@ -405,6 +407,8 @@ public class NetworkClient implements KafkaClient {
     public boolean isReady(Node node, long now) {
         // if we need to update our metadata now declare all requests unready to make metadata requests first
         // priority
+        // !metadataUpdater.isUpdateDue(now) 没有在更新元数据信息
+        // canSendRequest(node.idString(), now) 连接已经建好并且可以发送数据
         return !metadataUpdater.isUpdateDue(now) && canSendRequest(node.idString(), now);
     }
 
@@ -415,6 +419,12 @@ public class NetworkClient implements KafkaClient {
      * @param now the current timestamp
      */
     private boolean canSendRequest(String node, long now) {
+        /*
+         1.connectionStates.isReady(node, now) 生产者缓存了节点的连接，
+         一个broker对应一个连接，从缓存中检查是否已经与节点建立好连接
+         2.selector.isChannelReady(node) selector中绑定了多个KafkaChannel，一个channel就是一个连接
+         3.inFlightRequests.canSendMore(node) 发送中的消息没有超出最大限制，最大限制见ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION
+         */
         return connectionStates.isReady(node, now) && selector.isChannelReady(node) &&
             inFlightRequests.canSendMore(node);
     }
@@ -468,6 +478,7 @@ public class NetworkClient implements KafkaClient {
             }
             // The call to build may also throw UnsupportedVersionException, if there are essential
             // fields that cannot be represented in the chosen version.
+            // 发送逻辑的核心
             doSend(clientRequest, isInternalRequest, now, builder.build(version));
         } catch (UnsupportedVersionException unsupportedVersionException) {
             // If the version is not supported, skip sending the request over the wire.
@@ -502,7 +513,7 @@ public class NetworkClient implements KafkaClient {
         }
         // 封装send
         Send send = request.toSend(destination, header);
-        // 封装成发送中的请求
+        // 封装成发送中的请求（即消息已经发出去，但尚未得到返回结果）
         InFlightRequest inFlightRequest = new InFlightRequest(
                 clientRequest,
                 header,
@@ -511,6 +522,7 @@ public class NetworkClient implements KafkaClient {
                 send,
                 now);
         // 把发送中请求加入到发送中请求队列中
+        // 记录发送中的请求主要是为了做最大发送中请求数量的限制
         this.inFlightRequests.add(inFlightRequest);
         // 把send请求加入到kafkaChannel中
         selector.send(send);
@@ -550,13 +562,17 @@ public class NetworkClient implements KafkaClient {
         // process completed actions
         long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
+        // 把“消息发送出去之后不关心结果（ack=0）”的发送请求对应的response添加到集合中
         handleCompletedSends(responses, updatedNow);
         // 处理已经完成接收的response
         handleCompletedReceives(responses, updatedNow);
+        // 把已经断开连接的node的response添加到集合中
         handleDisconnections(responses, updatedNow);
         handleConnections();
         handleInitiateApiVersionRequests(updatedNow);
+        // 把超时的请求对应的response加入到集合中
         handleTimedOutRequests(responses, updatedNow);
+        // 处理利用response做回调
         completeResponses(responses);
 
         return responses;
@@ -762,6 +778,7 @@ public class NetworkClient implements KafkaClient {
                 break; // Disconnections in other states are logged at debug level in Selector
         }
 
+        // 取消正在发送中的请求
         cancelInFlightRequests(nodeId, now, responses);
         metadataUpdater.handleServerDisconnect(now, nodeId, Optional.ofNullable(disconnectState.exception()));
     }
@@ -774,11 +791,14 @@ public class NetworkClient implements KafkaClient {
      * @param now The current time
      */
     private void handleTimedOutRequests(List<ClientResponse> responses, long now) {
+        // 返回具有正在发送中请求并且已经处理超时的节点列表
         List<String> nodeIds = this.inFlightRequests.nodesWithTimedOutRequests(now);
         for (String nodeId : nodeIds) {
             // close connection to the node
+            // 关闭节点
             this.selector.close(nodeId);
             log.debug("Disconnecting from node {} due to request timeout.", nodeId);
+            // 处理节点的断开
             processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
         }
     }
@@ -1197,6 +1217,7 @@ public class NetworkClient implements KafkaClient {
         final Send send;
         final long sendTimeMs;
         final long createdTimeMs;
+        // 这个配置CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG的值
         final long requestTimeoutMs;
 
         public InFlightRequest(ClientRequest clientRequest,

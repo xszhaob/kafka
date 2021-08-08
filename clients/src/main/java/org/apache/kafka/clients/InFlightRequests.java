@@ -100,6 +100,7 @@ final class InFlightRequests {
     public boolean canSendMore(String node) {
         Deque<NetworkClient.InFlightRequest> queue = requests.get(node);
         return queue == null || queue.isEmpty() ||
+                // TODO: 2021/8/7 这里为什么在队列长度小于最大发送中批次数量的情况下，还判断第一个批次已经发送完成？
                (queue.peekFirst().send.completed() && queue.size() < this.maxInFlightRequestsPerConnection);
     }
 

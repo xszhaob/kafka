@@ -373,6 +373,10 @@ public class KafkaChannel implements AutoCloseable {
         return socket.getInetAddress().toString();
     }
 
+    /**
+     * 设置发送的内容，并且添加write事件
+     * @param send
+     */
     public void setSend(Send send) {
         if (this.send != null)
             throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress, connection id is " + id);
@@ -409,6 +413,11 @@ public class KafkaChannel implements AutoCloseable {
         return receive;
     }
 
+    /**
+     * 如果已经读取完成，那么payload进行复位；
+     *
+     * @return 已经读取完成的NetworkReceive，null如果未读取完成
+     */
     public NetworkReceive maybeCompleteReceive() {
         if (receive != null && receive.complete()) {
             receive.payload().rewind();
@@ -419,6 +428,7 @@ public class KafkaChannel implements AutoCloseable {
         return null;
     }
 
+    // 发送请求到socketChannel中
     public long write() throws IOException {
         if (send == null)
             return 0;

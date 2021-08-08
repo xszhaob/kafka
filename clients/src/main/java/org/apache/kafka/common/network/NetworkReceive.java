@@ -35,11 +35,16 @@ public class NetworkReceive implements Receive {
     private static final Logger log = LoggerFactory.getLogger(NetworkReceive.class);
     private static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0);
 
+    // node.idString()
     private final String source;
+    // 表示消息内容的大小
     private final ByteBuffer size;
+    // 接收数据的最大限制
     private final int maxSize;
     private final MemoryPool memoryPool;
+    // 读取消息内容所需要的空间大小
     private int requestedBufferSize = -1;
+    // 真正存储数据的buffer
     private ByteBuffer buffer;
 
 
@@ -84,6 +89,9 @@ public class NetworkReceive implements Receive {
         return source;
     }
 
+    /**
+     * 消息的大小字段读取完成，消息也读取完成
+     */
     @Override
     public boolean complete() {
         return !size.hasRemaining() && buffer != null && !buffer.hasRemaining();
@@ -91,18 +99,22 @@ public class NetworkReceive implements Receive {
 
     public long readFrom(ScatteringByteChannel channel) throws IOException {
         int read = 0;
+        // 说明还未读取消息的大小
         if (size.hasRemaining()) {
             int bytesRead = channel.read(size);
             if (bytesRead < 0)
                 throw new EOFException();
             read += bytesRead;
+            // 表示已经读取到4字节的数据了
             if (!size.hasRemaining()) {
+                // 把position、mark复位
                 size.rewind();
                 int receiveSize = size.getInt();
                 if (receiveSize < 0)
                     throw new InvalidReceiveException("Invalid receive (size = " + receiveSize + ")");
                 if (maxSize != UNLIMITED && receiveSize > maxSize)
                     throw new InvalidReceiveException("Invalid receive (size = " + receiveSize + " larger than " + maxSize + ")");
+                // 读取消息所需要的空间大小
                 requestedBufferSize = receiveSize; //may be 0 for some payloads (SASL)
                 if (receiveSize == 0) {
                     buffer = EMPTY_BUFFER;
@@ -115,6 +127,7 @@ public class NetworkReceive implements Receive {
                 log.trace("Broker low on memory - could not allocate buffer of size {} for source {}", requestedBufferSize, source);
         }
         if (buffer != null) {
+            // 读取数据
             int bytesRead = channel.read(buffer);
             if (bytesRead < 0)
                 throw new EOFException();

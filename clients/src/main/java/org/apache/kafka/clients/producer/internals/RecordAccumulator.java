@@ -299,11 +299,13 @@ public final class RecordAccumulator {
     }
 
     public void maybeUpdateNextBatchExpiryTime(ProducerBatch batch) {
-        if (batch.createdMs + deliveryTimeoutMs  > 0) {
+        if (batch.createdMs + deliveryTimeoutMs  > 0) {// 为了防止溢出
             // the non-negative check is to guard us against potential overflow due to setting
             // a large value for deliveryTimeoutMs
+            // 计算所有批次中超时时间（绝对时间）最早的批次，并把该批次的超时时间设置为下个 批次超时时间的时间戳
             nextBatchExpiryTimeMs = Math.min(nextBatchExpiryTimeMs, batch.createdMs + deliveryTimeoutMs);
         } else {
+            // 溢出时的warning
             log.warn("Skipping next batch expiry time update due to addition overflow: "
                 + "batch.createMs={}, deliveryTimeoutMs={}", batch.createdMs, deliveryTimeoutMs);
         }
@@ -704,7 +706,9 @@ public final class RecordAccumulator {
         incomplete.remove(batch);
         // Only deallocate the batch if it is not a split batch because split batch are allocated outside the
         // buffer pool.
+        // 如果不是分割的批次
         if (!batch.isSplitBatch())
+            // 归还内存
             free.deallocate(batch.buffer(), batch.initialCapacity());
     }
 
