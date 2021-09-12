@@ -1754,6 +1754,7 @@ class Log(@volatile private var _dir: File,
    * or because the log size is > retentionSize.
    *
    * Whether or not deletion is enabled, delete any log segments that are before the log start offset
+   * todo 这个逻辑没看懂，需要再确认一下
    */
   def deleteOldSegments(): Int = {
     if (config.delete) {

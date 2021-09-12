@@ -256,11 +256,13 @@ public class KafkaChannel implements AutoCloseable {
     /**
      * Unmute the channel. The channel can be unmuted only if it is in the MUTED state. For other muted states
      * (MUTED_AND_*), this is a no-op.
+     * 如果kafkaChannel状态等于MUTED，为channel绑定OP_READ事件，并将kafkaChannel的状态改为NOT_MUTED
      *
      * @return Whether or not the channel is in the NOT_MUTED state after the call
      */
     boolean maybeUnmute() {
         if (muteState == ChannelMuteState.MUTED) {
+            // 为channel绑定OP_READ事件，继续接收请求
             if (!disconnected) transportLayer.addInterestOps(SelectionKey.OP_READ);
             muteState = ChannelMuteState.NOT_MUTED;
         }
@@ -381,6 +383,9 @@ public class KafkaChannel implements AutoCloseable {
         if (this.send != null)
             throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress, connection id is " + id);
         this.send = send;
+        // 注册OP_WRITE事件，一旦绑定了该事件，就可以处理写出的请求了
+        // 这里的写出有可能是Client端向Server发送请求，也可能是Server端给Client的返回数据。
+        // 因为这个Channel类是服务端和客户端公用的
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
     }
 

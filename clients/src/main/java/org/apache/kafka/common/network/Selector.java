@@ -314,6 +314,7 @@ public class Selector implements Selectable, AutoCloseable {
     /**
      * Register the nioSelector with an existing channel
      * Use this on server-side, when a connection is accepted by a different thread but processed by the Selector
+     * 在server侧使用，连接被acceptor对应的线程用nioSelector接收，请求和响应的处理使用processor对应的线程以及KafkaSelector
      * <p>
      * If a connection already exists with the same connection id in `channels` or `closingChannels`,
      * an exception is thrown. Connection ids must be chosen to avoid conflict when remote ports are reused.
@@ -327,6 +328,7 @@ public class Selector implements Selectable, AutoCloseable {
      */
     public void register(String id, SocketChannel socketChannel) throws IOException {
         ensureNotRegistered(id);
+        // socketChannel向selector注册一个OP_READ事件
         registerChannel(id, socketChannel, SelectionKey.OP_READ);
         this.sensors.connectionCreated.record();
         // Default to empty client information as the ApiVersionsRequest is not
@@ -345,6 +347,7 @@ public class Selector implements Selectable, AutoCloseable {
 
     protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
         SelectionKey key = socketChannel.register(nioSelector, interestedOps);
+        // 构建一个kafkaChannel
         KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key);
         // 维护brokerId和channel的关系
         this.channels.put(id, channel);
@@ -355,8 +358,10 @@ public class Selector implements Selectable, AutoCloseable {
 
     private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
         try {
+            // 构建一个kafkaChannel，把key加入到channel中，方便通过channel找到key
             KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool,
                 new SelectorChannelMetadataRegistry());
+            // 把channel关联到key上，方便后续通过key得到kafkaChannel
             key.attach(channel);
             return channel;
         } catch (Exception e) {
@@ -415,7 +420,7 @@ public class Selector implements Selectable, AutoCloseable {
             this.failedSends.add(connectionId);
         } else {
             try {
-                // 把请求的内容放入send中
+                // 把请求的内容放入send中，并且注册Write事件
                 channel.setSend(send);
             } catch (Exception e) {
                 // update the state for consistency, the channel will be discarded after `close`
@@ -488,7 +493,7 @@ public class Selector implements Selectable, AutoCloseable {
 
         /* check ready keys */
         long startSelect = time.nanoseconds();
-        // 阻塞获取已经就绪的感兴趣事件
+        // 阻塞获取已经就绪的事件
         int numReadyKeys = select(timeout);
         long endSelect = time.nanoseconds();
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
@@ -505,7 +510,7 @@ public class Selector implements Selectable, AutoCloseable {
             }
 
             // Poll from channels where the underlying socket has more data
-            // 处理在selector中已经就绪的感兴趣事件
+            // 处理在selector中已经就绪的事件
             pollSelectionKeys(readyKeys, false, endSelect);
             // Clear all selected keys so that they are included in the ready count for the next select
             readyKeys.clear();
@@ -624,6 +629,7 @@ public class Selector implements Selectable, AutoCloseable {
 
                 long nowNanos = channelStartTimeNanos != 0 ? channelStartTimeNanos : currentTimeNanos;
                 try {
+                    // 处理OP_WRITE事件，真正向channel写入数据
                     attemptWrite(key, channel, nowNanos);
                 } catch (Exception e) {
                     sendFailed = true;
@@ -686,12 +692,22 @@ public class Selector implements Selectable, AutoCloseable {
             if (bytesSent > 0)
                 this.sensors.recordBytesSent(nodeId, bytesSent, currentTimeMs);
             if (send != null) {
+                // 写入完成，将send加到发送完成的列表中
                 this.completedSends.add(send);
                 this.sensors.recordCompletedSend(nodeId, send.size(), currentTimeMs);
             }
         }
     }
 
+    /**
+     * 在每次处理就绪的事件时，有可能selectKey的顺序是一样的。
+     * 当内存不足时可能是导致读取操作无法及时处理（读取饿死），为了解决这个问题，在内存不足时，我们都打乱selectKey的顺序。
+     * todo 这是因为出现了下面的情况？在内存只有8Kb的情况下，selectionKeys的顺序是如下这样的：
+     * aKey     bKey    cKey
+     * 10Kb     5Kb     2Kb
+     * @param selectionKeys
+     * @return
+     */
     private Collection<SelectionKey> determineHandlingOrder(Set<SelectionKey> selectionKeys) {
         //it is possible that the iteration order over selectionKeys is the same every invocation.
         //this may cause starvation of reads when memory is low. to address this we shuffle the keys if memory is low.

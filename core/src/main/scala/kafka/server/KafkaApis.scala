@@ -123,6 +123,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
+   * 处理所有发送到服务端请求的方法，根据提供的apiKey做转发
    */
   def handle(request: RequestChannel.Request): Unit = {
     try {
@@ -502,24 +503,34 @@ class KafkaApis(val requestChannel: RequestChannel,
       return
     }
 
+    // 未授权的请求
     val unauthorizedTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
+    // 所创建的消息的topic不存在的请求
     val nonExistingTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
+    // 校验非法的请求
     val invalidRequestResponses = mutable.Map[TopicPartition, PartitionResponse]()
+    // 有权限的请求
     val authorizedRequestInfo = mutable.Map[TopicPartition, MemoryRecords]()
+    // 有权限的topic
     val authorizedTopics = filterAuthorized(request.context, WRITE, TOPIC,
       produceRequest.partitionRecordsOrFail.asScala.toSeq.map(_._1.topic))
 
     for ((topicPartition, memoryRecords) <- produceRequest.partitionRecordsOrFail.asScala) {
+      // topic没有授权
       if (!authorizedTopics.contains(topicPartition.topic))
         unauthorizedTopicResponses += topicPartition -> new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
+      // topic不存在
       else if (!metadataCache.contains(topicPartition))
         nonExistingTopicResponses += topicPartition -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
       else
         try {
+          // 对请求进行验证
           ProduceRequest.validateRecords(request.header.apiVersion, memoryRecords)
+          // 针对验证成功的请求，添加到有权限的请求中
           authorizedRequestInfo += (topicPartition -> memoryRecords)
         } catch {
           case e: ApiException =>
+            // 针对验证失败的请求，添加到非法的请求中
             invalidRequestResponses += topicPartition -> new PartitionResponse(Errors.forException(e))
         }
     }
@@ -558,6 +569,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       // Send the response immediately. In case of throttling, the channel has already been muted.
+      // 不需要响应的请求
       if (produceRequest.acks == 0) {
         // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
         // the request, since no response is expected by the producer, the server will close socket server so that
@@ -578,6 +590,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           sendNoOpResponseExemptThrottle(request)
         }
       } else {
+        // 把响应放到响应队列中，唤醒selector线程
         sendResponse(request, Some(new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs)), None)
       }
     }
@@ -594,6 +607,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
 
       // call the replica manager to append messages to the replicas
+      // 消息追加的磁盘中
       replicaManager.appendRecords(
         timeout = produceRequest.timeout.toLong,
         requiredAcks = produceRequest.acks,
@@ -3076,6 +3090,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     sendResponse(response)
   }
 
+  /**
+   * 把响应放到响应队列中
+   */
   private def sendResponse(response: RequestChannel.Response): Unit = {
     requestChannel.sendResponse(response)
   }

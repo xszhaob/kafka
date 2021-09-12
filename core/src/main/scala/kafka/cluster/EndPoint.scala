@@ -61,6 +61,13 @@ object EndPoint {
 
 /**
  * Part of the broker definition - matching host/port pair to a protocol
+ *
+ * Endpoint封装了一个Listener
+ * 格式:
+ * listener_name://host_name:port
+ * 示例:
+ * PLAINTEXT://your.host.name:9092
+ * 其中securityProtocol是根据listenerName获取的。
  */
 case class EndPoint(host: String, port: Int, listenerName: ListenerName, securityProtocol: SecurityProtocol) {
   def connectionString: String = {
