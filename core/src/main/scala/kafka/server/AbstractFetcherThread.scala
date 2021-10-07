@@ -114,11 +114,16 @@ abstract class AbstractFetcherThread(name: String,
 
   override def doWork(): Unit = {
     maybeTruncate()
+    // 拉取数据
     maybeFetch()
   }
 
+  /**
+   * 向leader发送同步消息的请求
+   */
   private def maybeFetch(): Unit = {
     val fetchRequestOpt = inLock(partitionMapLock) {
+      // 构建请求参数
       val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = buildFetch(partitionStates.partitionStateMap.asScala)
 
       handlePartitionsWithErrors(partitionsWithError, "maybeFetch")

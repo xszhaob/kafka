@@ -278,6 +278,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 
+        // 创建broker信息，并向zk注册信息
         val brokerInfo = createBrokerInfo
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
 
@@ -289,6 +290,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         tokenManager.startup()
 
         /* start kafka controller */
+        // 初始化并启动kafka controller
         kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, threadNamePrefix)
         kafkaController.startup()
 
@@ -387,6 +389,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     info(s"Connecting to zookeeper on ${config.zkConnect}")
 
     def createZkClient(zkConnect: String, isSecure: Boolean) = {
+      // 创建KafkaZkClient对象
       KafkaZkClient(zkConnect, isSecure, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
         config.zkMaxInFlightRequests, time, name = Some("Kafka server"), zkClientConfig = Some(zkClientConfig))
     }
@@ -413,6 +416,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       zkClient.close()
     }
 
+    // 创建zkClient
     _zkClient = createZkClient(config.zkConnect, secureAclsEnabled)
     _zkClient.createTopLevelPaths()
   }

@@ -232,6 +232,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 findCoordinatorException = null;
                 throw fatalException;
             }
+            // 查找coordinator
             final RequestFuture<Void> future = lookupCoordinator();
             client.poll(future, timer);
 
@@ -397,7 +398,9 @@ public abstract class AbstractCoordinator implements Closeable {
      * @return true iff the operation succeeded
      */
     boolean joinGroupIfNeeded(final Timer timer) {
+        // 是否需要加入消费者组
         while (rejoinNeededOrPending()) {
+            // 是否找到了coordinator
             if (!ensureCoordinatorReady(timer)) {
                 return false;
             }
@@ -414,6 +417,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 onJoinPrepare(generation.generationId, generation.memberId);
             }
 
+            // 初始化join group的对象
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();
             client.poll(future, timer);
             if (!future.isDone()) {
@@ -492,6 +496,7 @@ public abstract class AbstractCoordinator implements Closeable {
             // in this case we would not update the start time.
             if (lastRebalanceStartMs == -1L)
                 lastRebalanceStartMs = time.milliseconds();
+            // 发送join group的请求
             joinFuture = sendJoinGroupRequest();
             joinFuture.addListener(new RequestFutureListener<ByteBuffer>() {
                 @Override
@@ -550,6 +555,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
         // send a join group request to the coordinator
         log.info("(Re-)joining group");
+        // 封装ApiKeys.JOIN_GROUP请求
         JoinGroupRequest.Builder requestBuilder = new JoinGroupRequest.Builder(
                 new JoinGroupRequestData()
                         .setGroupId(rebalanceConfig.groupId)
@@ -568,6 +574,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
         int joinGroupTimeoutMs = Math.max(rebalanceConfig.rebalanceTimeoutMs, rebalanceConfig.rebalanceTimeoutMs + 5000);
         return client.send(coordinator, requestBuilder, joinGroupTimeoutMs)
+                // 通过JoinGroupResponseHandler处理响应
                 .compose(new JoinGroupResponseHandler());
     }
 
@@ -672,9 +679,11 @@ public abstract class AbstractCoordinator implements Closeable {
         return sendSyncGroupRequest(requestBuilder);
     }
 
+    // leader consumer基于消费者线程数和topic的分区数，开始指定分区消费方案
     private RequestFuture<ByteBuffer> onJoinLeader(JoinGroupResponse joinResponse) {
         try {
             // perform the leader synchronization and send back the assignment for the group
+            // 制定分区消费的方案
             Map<String, ByteBuffer> groupAssignment = performAssignment(joinResponse.data().leader(), joinResponse.data().protocolName(),
                     joinResponse.data().members());
 
@@ -686,6 +695,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 );
             }
 
+            // 创建SyncGroupRequest，封装了分区消费方案
             SyncGroupRequest.Builder requestBuilder =
                     new SyncGroupRequest.Builder(
                             new SyncGroupRequestData()
@@ -698,6 +708,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                     .setAssignments(groupAssignmentList)
                     );
             log.debug("Sending leader SyncGroup to coordinator {} at generation {}: {}", this.coordinator, this.generation, requestBuilder);
+            // 发送分区消费方案给coordinator
             return sendSyncGroupRequest(requestBuilder);
         } catch (RuntimeException e) {
             return RequestFuture.failure(e);

@@ -136,8 +136,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.METADATA => handleTopicMetadataRequest(request)
         case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
         case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
+        // 节点更新元数据信息
         case ApiKeys.UPDATE_METADATA => handleUpdateMetadataRequest(request)
         case ApiKeys.CONTROLLED_SHUTDOWN => handleControlledShutdownRequest(request)
+        // 处理提交偏移量的请求
         case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request)
         case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
         case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
@@ -291,6 +293,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val updateMetadataRequest = request.body[UpdateMetadataRequest]
 
     authorizeClusterOperation(request, CLUSTER_ACTION)
+    // todo 这里是什么意思？
     if (isBrokerEpochStale(updateMetadataRequest.brokerEpoch)) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
@@ -627,6 +630,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Handle a fetch request
    */
   def handleFetchRequest(request: RequestChannel.Request): Unit = {
+    // 获取请求的信息
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
     val fetchRequest = request.body[FetchRequest]
@@ -655,6 +659,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val erroneous = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData[Records])]()
     val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
+    // 请求来自flower
     if (fetchRequest.isFromFollower) {
       // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
       if (authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
@@ -670,6 +675,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
     } else {
+      // 请求来自消费者
       // Regular Kafka consumers need READ permission on each partition they are fetching.
       val fetchTopics = new mutable.ArrayBuffer[String]
       fetchContext.foreachPartition { (topicPartition, _) => fetchTopics += topicPartition.topic }
@@ -1305,6 +1311,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleFindCoordinatorRequest(request: RequestChannel.Request): Unit = {
     val findCoordinatorRequest = request.body[FindCoordinatorRequest]
 
+    // 权限校验
     if (findCoordinatorRequest.data.keyType == CoordinatorType.GROUP.id &&
         !authorize(request.context, DESCRIBE, GROUP, findCoordinatorRequest.data.key))
       sendErrorResponseMaybeThrottle(request, Errors.GROUP_AUTHORIZATION_FAILED.exception)
@@ -1317,6 +1324,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case CoordinatorType.GROUP =>
           val partition = groupCoordinator.partitionFor(findCoordinatorRequest.data.key)
           val metadata = getOrCreateInternalTopic(GROUP_METADATA_TOPIC_NAME, request.context.listenerName)
+          // 分区，元数据
           (partition, metadata)
 
         case CoordinatorType.TRANSACTION =>
@@ -1488,6 +1496,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val protocols = joinGroupRequest.data.protocols.valuesList.asScala.map(protocol =>
         (protocol.name, protocol.metadata)).toList
 
+      // 核心代码
       groupCoordinator.handleJoinGroup(
         joinGroupRequest.data.groupId,
         joinGroupRequest.data.memberId,
@@ -3087,6 +3096,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       case None =>
         new RequestChannel.NoOpResponse(request)
     }
+    // 把响应放到响应队列中
     sendResponse(response)
   }
 

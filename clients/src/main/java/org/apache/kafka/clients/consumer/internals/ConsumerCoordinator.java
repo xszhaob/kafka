@@ -472,6 +472,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return false;
             }
 
+            /*
+            检查当前consumer是否需要加入group。事实上consumer正式在调用poll方法的时候才加入到group里面的，
+            如果更改了topic的注册信息（如果有consumer退出了当前group），那么当前consumer就需要重新加入group
+             */
             if (rejoinNeededOrPending()) {
                 // due to a race condition between the initial metadata fetch and the initial rebalance,
                 // we need to ensure that the metadata is fresh before joining initially. This ensures
@@ -511,7 +515,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 client.awaitMetadataUpdate(timer);
             }
         }
-
+        // 如果是自动提交的话，提交偏移量
         maybeAutoCommitOffsetsAsync(timer.currentTimeMs());
         return true;
     }
@@ -1122,7 +1126,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         } else {
             generation = Generation.NO_GENERATION;
         }
-
+        // 封装提交偏移量的请求
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
                 new OffsetCommitRequestData()
                         .setGroupId(this.rebalanceConfig.groupId)

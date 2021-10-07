@@ -244,7 +244,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     assert(groupId == member.groupId)
     assert(this.protocolType.orNull == member.protocolType)
     assert(supportsProtocols(member.protocolType, MemberMetadata.plainProtocolSet(member.supportedProtocols)))
-
+    // 如果leaderId为空，把当前的memberId赋值给leaderId
     if (leaderId.isEmpty)
       leaderId = Some(member.memberId)
     members.put(member.memberId, member)

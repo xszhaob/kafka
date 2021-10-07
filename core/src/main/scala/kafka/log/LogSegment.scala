@@ -68,9 +68,16 @@ class LogSegment private[log] (val log: FileRecords,
 
   def shouldRoll(rollParams: RollParams): Boolean = {
     val reachedRollMs = timeWaitedForRoll(rollParams.now, rollParams.maxTimestampInMessages) > rollParams.maxSegmentMs - rollJitterMs
+    // 1.当前已经使用的size + 本次消息的size > segment最大的size
     size > rollParams.maxSegmentBytes - rollParams.messagesSize ||
+    // 当前segment有数据，并且segment存在时间已经达到了某个值（）
       (size > 0 && reachedRollMs) ||
-      offsetIndex.isFull || timeIndex.isFull || !canConvertToRelativeOffset(rollParams.maxOffsetInMessages)
+    // 索引文件满了
+      offsetIndex.isFull ||
+    // 时间索引文件满了
+    timeIndex.isFull ||
+    // 追加消息最大的offset跟文件的baseOffset之间的相对偏移量，超过正整数的最大值
+    !canConvertToRelativeOffset(rollParams.maxOffsetInMessages)
   }
 
   def resizeIndexes(size: Int): Unit = {
@@ -152,9 +159,11 @@ class LogSegment private[log] (val log: FileRecords,
       if (physicalPosition == 0)
         rollingBasedTimestamp = Some(largestTimestamp)
 
+      // 确保最大位移是合法的
       ensureOffsetInRange(largestOffset)
 
       // append the messages
+      // 调用FileRecords的append添加records
       val appendedBytes = log.append(records)
       trace(s"Appended $appendedBytes to ${log.file} at end offset $largestOffset")
       // Update the in memory max timestamp and corresponding offset.
@@ -163,6 +172,7 @@ class LogSegment private[log] (val log: FileRecords,
         offsetOfMaxTimestampSoFar = shallowOffsetOfMaxTimestamp
       }
       // append an entry to the index (if needed)
+      // indexIntervalBytes默认值4096。index.interval.bytes
       if (bytesSinceLastIndexEntry > indexIntervalBytes) {
         offsetIndex.append(largestOffset, physicalPosition)
         timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar)

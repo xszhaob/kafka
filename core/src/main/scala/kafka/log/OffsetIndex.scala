@@ -143,7 +143,9 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
       require(!isFull, "Attempt to append to a full index (size = " + _entries + ").")
       if (_entries == 0 || offset > _lastOffset) {
         trace(s"Adding index entry $offset => $position to ${file.getAbsolutePath}")
+        // 计算相对偏移量并做记录
         mmap.putInt(relativeOffset(offset))
+        // 记录物理地址
         mmap.putInt(position)
         _entries += 1
         _lastOffset = offset

@@ -587,6 +587,12 @@ class ReplicaManager(val config: KafkaConfig,
 
       recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
 
+      /*
+      Kafka服务端在处理客户端的一些请求时，如果不能及时返回响应结果给客户端，
+      会在服务端创建一个延迟操作对象（DelayedOperation），并放在延迟缓存中（DelayedOperationPurgatory）。
+      Kafka的延迟操作有多种：延迟的生产、延迟的响应、延迟的加入、延迟的心跳
+      创建DelayedProduce对象，超过timeout时间后这个操作会被认定为超时，并立刻返回，发送响应给客户端
+       */
       if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
         // create delayed produce operation
         val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
@@ -1000,6 +1006,7 @@ class ReplicaManager(val config: KafkaConfig,
     //                        3) has enough data to respond
     //                        4) some error happens while reading data
     //                        5) any of the requested partitions need HW update
+    // 请求不想等待 or 请求信息为空 or 可读取数据超过最小累计字节数 or 存在读取错误数据 or 任意的请求分区信息的HW需要更新
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || anyPartitionsNeedHwUpdate) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
@@ -1007,6 +1014,8 @@ class ReplicaManager(val config: KafkaConfig,
       }
       responseCallback(fetchPartitionData)
     } else {
+      // 构建一个延迟操作等待条件满足
+      // 可能是没有获取到数据，由于生产者长时间没有发送数，那么leaderPartition是没有数据，那么flowerPartition也是获取不到数据
       // construct the fetch results from the read results
       val fetchPartitionStatus = new mutable.ArrayBuffer[(TopicPartition, FetchPartitionStatus)]
       fetchInfos.foreach { case (topicPartition, partitionData) =>

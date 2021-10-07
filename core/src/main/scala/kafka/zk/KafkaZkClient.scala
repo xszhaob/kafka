@@ -91,6 +91,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     * @return broker epoch (znode create transaction id)
     */
   def registerBroker(brokerInfo: BrokerInfo): Long = {
+    // brokers/ids/$id
     val path = brokerInfo.path
     val stat = checkedEphemeralCreate(path, brokerInfo.toJsonBytes)
     info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}, czxid (broker epoch): ${stat.getCzxid}")
@@ -421,6 +422,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     * Gets all brokers with broker epoch in the cluster.
     * @return map of broker to epoch in the cluster.
     */
+    // 从zk的/brokers/ids节点下获取所有的节点和节点数据
   def getAllBrokerAndEpochsInCluster: Map[Broker, Long] = {
     val brokerIds = getSortedBrokerList
     val getDataRequests = brokerIds.map(brokerId => GetDataRequest(BrokerIdZNode.path(brokerId), ctx = Some(brokerId)))

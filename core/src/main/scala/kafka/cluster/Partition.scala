@@ -852,6 +852,7 @@ class Partition(val topicPartition: TopicPartition,
     val leaderHWIncremented = needsIsrUpdate && inWriteLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
+          // 获取要移除掉的replicas
           val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
           if (outOfSyncReplicaIds.nonEmpty) {
             val newInSyncReplicaIds = inSyncReplicaIds -- outOfSyncReplicaIds
@@ -916,9 +917,13 @@ class Partition(val topicPartition: TopicPartition,
      * is violated, that replica is considered to be out of sync
      *
      **/
+      // 获取把leader partition移除掉之后的ISR列表
     val candidateReplicaIds = inSyncReplicaIds - localBrokerId
     val currentTimeMs = time.milliseconds()
     val leaderEndOffset = localLogOrException.logEndOffset
+    // 过滤得到延迟的Replica
+    // 条件：follower的leo不等于leader的leo 并且 当前时间 - follower.lastCaughtUpTimeMs > maxLagMs
+    // 如果follower长时间没有获取数据，则需要从ISR中移除
     candidateReplicaIds.filter(replicaId => isFollowerOutOfSync(replicaId, leaderEndOffset, currentTimeMs, maxLagMs))
   }
 

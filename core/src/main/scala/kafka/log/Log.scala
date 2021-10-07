@@ -262,6 +262,7 @@ class Log(@volatile private var _dir: File,
   @volatile private var highWatermarkMetadata: LogOffsetMetadata = LogOffsetMetadata(logStartOffset)
 
   /* the actual segments of the log */
+  // <segment.baseOffset,segment>
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
 
   // Visible for testing
@@ -1034,10 +1035,19 @@ class Log(@volatile private var _dir: File,
    * This method will generally be responsible for assigning offsets to the messages,
    * however if the assignOffsets=false flag is passed we will only check that the existing offsets are valid.
    *
+   * 第一步：校验发送过来的消息是否合法
+   * 第二步：给这批消息分配offset
+   * 第三步：获取到合法的数据
+   * 第四步：获取一个可用的LogSegment对象
+   * 第五步：数据写入到LogSegment中
+   * 第六步：更新LEO
+   * 第七步：如果满足刷新条件，将数据从内存刷到磁盘
+   *
    * @param records The log records to append
    * @param origin Declares the origin of the append which affects required validations
    * @param interBrokerProtocolVersion Inter-broker message protocol version
    * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
+   *                      log应该为该消息集分配偏移量，还是盲目地应用给定的偏移量
    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @throws OffsetsOutOfOrderException If out of order offsets found in 'records'
@@ -1050,20 +1060,26 @@ class Log(@volatile private var _dir: File,
                      assignOffsets: Boolean,
                      leaderEpoch: Int): LogAppendInfo = {
     maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
+      // 校验数据，主要是检查消息的大小及crc校验
       val appendInfo = analyzeAndValidateRecords(records, origin)
 
       // return if we have no valid messages or if this is a duplicate of the last appended entry
+      // 如果没有有效的消息，则直接返回
       if (appendInfo.shallowCount == 0)
         return appendInfo
 
       // trim any invalid bytes or partial messages before appending it to the on-disk log
+      // 在将消息写入到存储在磁盘上的log文件之前，裁剪无效的字节或部分消息
       var validRecords = trimInvalidBytes(records, appendInfo)
 
       // they are valid, insert them in the log
       lock synchronized {
+        // 确保log对象没有关闭
         checkIfMemoryMappedBufferClosed()
+        // 是否需要分配偏移量
         if (assignOffsets) {
           // assign offsets to the message set
+          // 为firstOffset赋值
           val offset = new LongRef(nextOffsetMetadata.messageOffset)
           appendInfo.firstOffset = Some(offset.value)
           val now = time.milliseconds
@@ -1087,8 +1103,11 @@ class Log(@volatile private var _dir: File,
             case e: IOException =>
               throw new KafkaException(s"Error validating messages while appending to log $name", e)
           }
+          // 获取校验之后的消息
           validRecords = validateAndOffsetAssignResult.validatedRecords
+          // 获取最大时间戳
           appendInfo.maxTimestamp = validateAndOffsetAssignResult.maxTimestamp
+          // 获取最大时间戳
           appendInfo.offsetOfMaxTimestamp = validateAndOffsetAssignResult.shallowOffsetOfMaxTimestamp
           appendInfo.lastOffset = offset.value - 1
           appendInfo.recordConversionStats = validateAndOffsetAssignResult.recordConversionStats
@@ -1156,6 +1175,7 @@ class Log(@volatile private var _dir: File,
         }
 
         // maybe roll the log if this segment is full
+        // 获取一个segment，可能是新增的也可能是已有的
         val segment = maybeRoll(validRecords.sizeInBytes, appendInfo)
 
         val logOffsetMetadata = LogOffsetMetadata(
@@ -1187,6 +1207,7 @@ class Log(@volatile private var _dir: File,
         // will be cleaned up after the log directory is recovered. Note that the end offset of the
         // ProducerStateManager will not be updated and the last stable offset will not advance
         // if the append to the transaction index fails.
+        // 更新LEO
         updateLogEndOffset(appendInfo.lastOffset + 1)
 
         // update the producer state
@@ -1213,7 +1234,7 @@ class Log(@volatile private var _dir: File,
           s"first offset: ${appendInfo.firstOffset}, " +
           s"next offset: ${nextOffsetMetadata.messageOffset}, " +
           s"and messages: $validRecords")
-
+        // 根据条件判断，把内存中的数据写入到磁盘中
         if (unflushedMessages >= config.flushInterval)
           flush()
 
@@ -1850,6 +1871,7 @@ class Log(@volatile private var _dir: File,
         in the header.
       */
       appendInfo.firstOffset match {
+          // 新建logSegment
         case Some(firstOffset) => roll(Some(firstOffset))
         case None => roll(Some(maxOffsetInMessages - Integer.MAX_VALUE))
       }
@@ -1869,7 +1891,9 @@ class Log(@volatile private var _dir: File,
       val start = time.hiResClockMs()
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
+        // 获取LEO值
         val newOffset = math.max(expectedNextOffset.getOrElse(0L), logEndOffset)
+        // 基于LEO值生成一个新的文件
         val logFile = Log.logFile(dir, newOffset)
 
         if (segments.containsKey(newOffset)) {
@@ -1892,12 +1916,15 @@ class Log(@volatile private var _dir: File,
             s"Trying to roll a new log segment for topic partition $topicPartition with " +
             s"start offset $newOffset =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) lower than start offset of the active segment $activeSegment")
         } else {
+          // 基于LEO生成index文件
           val offsetIdxFile = offsetIndexFile(dir, newOffset)
+          // 基于LEO生成timeindex文件
           val timeIdxFile = timeIndexFile(dir, newOffset)
           val txnIdxFile = transactionIndexFile(dir, newOffset)
 
           for (file <- List(logFile, offsetIdxFile, timeIdxFile, txnIdxFile) if file.exists) {
             warn(s"Newly rolled segment file ${file.getAbsolutePath} already exists; deleting it first")
+            // 如果文件存在，就先删除
             Files.delete(file.toPath)
           }
 
@@ -1919,6 +1946,7 @@ class Log(@volatile private var _dir: File,
           fileAlreadyExists = false,
           initFileSize = initFileSize,
           preallocate = config.preallocate)
+        // 把segment添加到集合中
         addSegment(segment)
 
         // We need to update the segment base offset and append position data of the metadata when log rolls.

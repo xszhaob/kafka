@@ -305,7 +305,9 @@ public class ConsumerNetworkClient implements Closeable {
 
     /**
      * Poll for network IO in best-effort only trying to transmit the ready-to-send request
+     * 尽力发送已经准备好的请求
      * Do not check any pending requests or metadata errors so that no exception should ever
+     * 不检查任何挂起的请求或元数据错误，因此不会有异常抛出，也不会触发唤醒，也不会有中断异常
      * be thrown, also no wakeups be triggered and no interrupted exception either.
      */
     public void transmitSends() {

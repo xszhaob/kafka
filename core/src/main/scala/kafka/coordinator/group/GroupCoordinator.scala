@@ -152,6 +152,7 @@ class GroupCoordinator(val brokerId: Int,
           // exist we should reject the request.
           if (isUnknownMember) {
             val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
+            // 把group添加到缓存中
             doUnknownJoinGroup(group, groupInstanceId, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
           } else {
             responseCallback(JoinGroupResult(memberId, Errors.UNKNOWN_MEMBER_ID))
@@ -165,8 +166,10 @@ class GroupCoordinator(val brokerId: Int,
               group.removeStaticMember(groupInstanceId)
               responseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
             } else if (isUnknownMember) {
+              // 把group添加到缓存中
               doUnknownJoinGroup(group, groupInstanceId, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
             } else {
+              // 把group添加到缓存中
               doJoinGroup(group, memberId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
             }
 
@@ -965,6 +968,7 @@ class GroupCoordinator(val brokerId: Int,
                                     protocols: List[(String, Array[Byte])],
                                     group: GroupMetadata,
                                     callback: JoinCallback): Unit = {
+    // 封装成一个member
     val member = new MemberMetadata(memberId, group.groupId, groupInstanceId,
       clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, protocols)

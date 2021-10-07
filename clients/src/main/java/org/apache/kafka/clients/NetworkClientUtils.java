@@ -91,8 +91,10 @@ public final class NetworkClientUtils {
      */
     public static ClientResponse sendAndReceive(KafkaClient client, ClientRequest request, Time time) throws IOException {
         try {
+            // 把send信息缓存到正在发送中队列中
             client.send(request, time.milliseconds());
             while (client.active()) {
+                // 通过client把请求写入到channel中
                 List<ClientResponse> responses = client.poll(Long.MAX_VALUE, time.milliseconds());
                 for (ClientResponse response : responses) {
                     if (response.requestHeader().correlationId() == request.correlationId()) {

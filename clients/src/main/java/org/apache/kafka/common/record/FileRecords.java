@@ -149,6 +149,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         // handle integer overflow or if end is beyond the end of the file
         if (end < 0 || end > start + currentSizeInBytes)
             end = start + currentSizeInBytes;
+        // 返回一个指定了position和结束位置的FileRecords
         return new FileRecords(file, channel, this.start + position, end, true);
     }
 

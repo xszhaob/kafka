@@ -1209,6 +1209,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws KafkaException if the rebalance callback throws exception
      */
     private ConsumerRecords<K, V> poll(final Timer timer, final boolean includeMetadataInTimeout) {
+        // 保证拉取消息的线程是同一个，并且确保consumer没有关闭
+        // 因为KafkaConsumer不是线程安全的，因此只能允许同时只有一个线程拉取数据，因此在poll之前需要进行判定
         acquireAndEnsureOpen();
         try {
             this.kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
@@ -1221,11 +1223,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             do {
                 client.maybeTriggerWakeup();
 
+                // 超时获取元数据的标识。建议设置为true，如果设置为false，
+                // 则会一直阻塞获取元数据信息，导致无法消息或者无法立刻返回空消息集合
                 if (includeMetadataInTimeout) {
                     // try to update assignment metadata BUT do not need to block on the timer,
+                    // 尝试更新元数据信息，但是不在timer上阻塞，
                     // since even if we are 1) in the middle of a rebalance or 2) have partitions
+                    // 因为即时我们处于1）在rebalance的过程中 或 2）有未知起始位置的分区，只要有可拉取数据的分区
                     // with unknown starting positions we may still want to return some data
+                    // 我们仍然想返回一些数据
                     // as long as there are some partitions fetchable; NOTE we always use a timer with 0ms
+                    // 注意：我们始终使用0毫秒的计时器，以确保在完成rebalance过程中不会出现任何阻塞
                     // to never block on completing the rebalance procedure if there's any
                     updateAssignmentMetadataIfNeeded(time.timer(0L));
                 } else {
@@ -1234,6 +1242,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     }
                 }
 
+                // consumer从broker中拉取数据
                 final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(timer);
                 if (!records.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
@@ -1243,6 +1252,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // NOTE: since the consumed position has already been updated, we must not allow
                     // wakeups or any other errors to be triggered prior to returning the fetched records.
                     if (fetcher.sendFetches() > 0 || client.hasPendingRequests()) {
+                        // 提前做网络IO，把消息拉取请求发送出去。
+                        // 在网络IO处理的同时，消息数据返回给consumer的调用者进行业务处理。
+                        // 以达到并行处理，提高效率
                         client.transmitSends();
                     }
 

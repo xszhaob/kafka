@@ -242,11 +242,12 @@ public class Fetcher<K, V> implements Closeable {
     public synchronized int sendFetches() {
         // Update metrics in case there was an assignment change
         sensors.maybeUpdateAssignment(subscriptions);
-
+        // 准备拉取数据的主机和请求信息
         Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareFetchRequests();
         for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
             final Node fetchTarget = entry.getKey();
             final FetchSessionHandler.FetchRequestData data = entry.getValue();
+            // 构建请求对象，请求ApiKeys.FETCH
             final FetchRequest.Builder request = FetchRequest.Builder
                     .forConsumer(this.maxWaitMs, this.minBytes, data.toSend())
                     .isolationLevel(isolationLevel)
@@ -258,6 +259,7 @@ public class Fetcher<K, V> implements Closeable {
             if (log.isDebugEnabled()) {
                 log.debug("Sending {} {} to broker {}", isolationLevel, data.toString(), fetchTarget);
             }
+            // 发送请求。这里仅仅是把请求放到unsent中，唤醒KafkaClient
             RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
             // We add the node to the set of nodes with pending fetch requests before adding the
             // listener because the future may have been fulfilled on another thread (e.g. during a
@@ -311,6 +313,7 @@ public class Fetcher<K, V> implements Closeable {
                                     Iterator<? extends RecordBatch> batches = partitionData.records.batches().iterator();
                                     short responseVersion = resp.requestHeader().apiVersion();
 
+                                    // 把请求得到的数据放到completedFetches
                                     completedFetches.add(new CompletedFetch(partition, partitionData,
                                             metricAggregator, batches, fetchOffset, responseVersion));
                                 }
@@ -593,8 +596,10 @@ public class Fetcher<K, V> implements Closeable {
      * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
+        // 存储拉取到的分区数据
         Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
         Queue<CompletedFetch> pausedCompletedFetches = new ArrayDeque<>();
+        // 每次拉取数据的最大条数
         int recordsRemaining = maxPollRecords;
 
         try {
