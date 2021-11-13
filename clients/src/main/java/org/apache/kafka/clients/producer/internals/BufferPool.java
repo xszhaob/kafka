@@ -42,6 +42,14 @@ import org.apache.kafka.common.utils.Time;
  * prevents starvation or deadlock when a thread asks for a large chunk of memory and needs to block until multiple
  * buffers are deallocated.
  * </ol>
+ * <p>
+ * 在给定的内存限制下的可重用的内存缓冲池，并且对于需要内存的生产者来说这些内存的使用是公平的。拥有以下特征：
+ * 1）池化技术：BufferPool内部保存了一个大小是{@value ProducerConfig#BATCH_SIZE_CONFIG}的空闲ByteBuffer的列表，
+ * 如果要申请的ByteBuffer大小是{@value ProducerConfig#BATCH_SIZE_CONFIG}，
+ * 当空闲ByteBuffer列表中有可用的则直接返回，且用完之后重新放入池中以复用。
+ * 2）公平。对于所有的内存申请者来说，申请内存是公平的，遵循先到先得的约定。如果先到的申请者申请不到内存，
+ * 会一直等待直到获得足够的内存或者等待超时，接下来才会给后来的内存申请者提供空闲内存。
+ * <p>
  * 总可用内存是 nonPooledAvailableMemory 和 free * poolableSize 中的字节缓冲区数的总和
  */
 public class BufferPool {
