@@ -66,6 +66,7 @@ public class DefaultPartitioner implements Partitioner {
                          int numPartitions) {
         // 如果没有指定key，则根据分区信息计算得到一个分区值
         if (keyBytes == null) {
+            // 使用了粘性分区的概念
             return stickyPartitionCache.partition(topic, cluster);
         }
         // hash the keyBytes to choose a partition

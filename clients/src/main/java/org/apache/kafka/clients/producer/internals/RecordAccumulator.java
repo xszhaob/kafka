@@ -236,7 +236,7 @@ public final class RecordAccumulator {
                     return appendResult;
                 }
 
-                // 记录的内存builder
+                // 消息的内存builder
                 MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
                 // 创建topic+partition维度的消息批次
                 ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, nowMs);
@@ -687,6 +687,8 @@ public final class RecordAccumulator {
 
     /**
      * Get the deque for the given topic-partition, creating it if necessary.
+     * 当一条消息（ ProducerRecord )
+     * 流入RecordAccumulator 时，会先寻找与消息分区所对应的双端队列（如果没有则新建）
      */
     private Deque<ProducerBatch> getOrCreateDeque(TopicPartition tp) {
         Deque<ProducerBatch> d = this.batches.get(tp);

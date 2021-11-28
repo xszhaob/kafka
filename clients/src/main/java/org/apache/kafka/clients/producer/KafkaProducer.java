@@ -955,12 +955,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 transactionManager.failIfNotReadyForSend();
             }
 
-            // 步骤七：将消息添加到累积器中
+            // 步骤七：将消息添加到累积器中，如果是首次进来，这里会返回一个空的result，abortForNewBatch是true
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs, true, nowMs);
 
             if (result.abortForNewBatch) {
                 int prevPartition = partition;
+                /*
+                这一步是为了保证在key没有指定的情况，新创建批次中的消息不使用之前批次中消息使用的分区
+                 */
                 partitioner.onNewBatch(record.topic(), cluster, prevPartition);
                 partition = partition(record, serializedKey, serializedValue, cluster);
                 tp = new TopicPartition(record.topic(), partition);

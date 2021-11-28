@@ -27,7 +27,13 @@ import org.apache.kafka.common.utils.Utils;
 
 /**
  * An internal class that implements a cache used for sticky partitioning behavior. The cache tracks the current sticky
- * partition for any given topic. This class should not be used externally. 
+ * partition for any given topic. This class should not be used externally.
+ * 粘性分区，使用粘性分区时，会优先使用之前使用的分区，
+ * 这样保证所有的消息都尽可能先发往一个分区中，使得该分区在生产者客户端缓存的批次消息尽快达到可以真正发送的状态。
+ * 缓存的分区被换掉的场景：
+ * 1）当前没有缓存的粘性分区，在调用StickyPartitionCache#partition时，part等于null；
+ * 2）该消息新的批次被创建时。
+ * 通过缓存的粘性分区切换的场景中的第2条可以得出，在消息量大的情况下，可以保证消息不会密集分布在一个分区中。
  */
 public class StickyPartitionCache {
     private final ConcurrentMap<String, Integer> indexCache;
