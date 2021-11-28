@@ -754,6 +754,8 @@ project(':core') {
     compile libs.scalaReflect
     compile libs.scalaLogging
     compile libs.slf4jApi
+    // 解决不打印日志的问题
+    compile libs.slf4jsimple
     compile(libs.zookeeper) {
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'

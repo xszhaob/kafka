@@ -57,6 +57,9 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPO
  * If topic expiry is enabled for the metadata, any topic that has not been used within the expiry interval
  * is removed from the metadata refresh set after an update. Consumers disable topic expiry since they explicitly
  * manage topics while producers rely on topic expiry to limit the refresh set.
+ *
+ * 元数据是Kafka集群的元数据，这些元数据具体记录了集群中有哪些主题，这些主题有哪些分区，这些分区的leader副本分配在哪个节点上，
+ * follower副本分配在哪些节点上，哪些副本在AR、ISR等集合中，集群中有哪些节点，控制器节点又是哪一个等信息。
  */
 public class Metadata implements Closeable {
     private final Logger log;

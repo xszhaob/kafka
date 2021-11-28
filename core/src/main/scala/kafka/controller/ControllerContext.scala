@@ -77,6 +77,12 @@ class ControllerContext {
   val shuttingDownBrokerIds = mutable.Set.empty[Int]
   private val liveBrokers = mutable.Set.empty[Broker]
   private val liveBrokerEpochs = mutable.Map.empty[Int, Long]
+  /**
+   * ZooKeeper中还有一个与控制器有关的/controller_epoch节点，
+   * 这个节点是待久(PERSISTENT)节点，节点中存放的是一个整型的controller—epoch值。
+   * controller—epoch用于记录控制器发生变更的次数，即记录当前的控制器是第几代控制器，
+   * 我们也可以称之为 “控制器的纪元”
+   */
   var epoch: Int = KafkaController.InitialControllerEpoch
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
 

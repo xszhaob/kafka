@@ -27,6 +27,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The set of requests which have been sent or are being sent but haven't yet received a response
+ * 请求在从Sender线程发往Kafka之前还会保存到inFlightRequests，它的主要作用是缓存了已经发出去但还没有收到响应的请求（NodeId
+ * 是一个String类型，表示节点的ID编号）。与此同时，InFlightRequests还提供了许多管理类的方法，并且通过配置参数还可以限制每个连接
+ * （也就是客户端与Node之间的连接）最多缓存的请求数。这个配置参数为<code>max.in.flight.requests.per.connection</code>，默认值
+ * 为5，即每个连接最多只能缓存5个未相应的请求，超过该数值之后就不再向这个连接发送更多的请求了，除非有缓存的请求收到了响应（Response）。
+ * 通过比较Deque<NetworkClient.InFlightRequest>的size与这个参数的大小来判断对应的Node中是否已经堆积了很多未响应的消息，
+ * 如果真是如此，那么说明这个Node节点负载较大或网络连接有问题，再继续发送请求会增加请求超时的可能。
  */
 final class InFlightRequests {
 

@@ -52,7 +52,14 @@ public class ProducerRecord<K, V> {
     private final Integer partition;
     private final Headers headers;
     private final K key;
+    /**
+     * value一般不为空，如果为空表示特定的消息-墓碑消息
+     */
     private final V value;
+    /**
+     * 消息的时间戳，在消息被添加到accumulator中时，如果该时间戳有值，则使用该时间戳，
+     * 否则使用追加到日志文件时的时间。
+     */
     private final Long timestamp;
 
     /**

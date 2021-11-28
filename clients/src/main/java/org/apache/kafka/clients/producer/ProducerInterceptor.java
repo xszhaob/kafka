@@ -39,6 +39,7 @@ public interface ProducerInterceptor<K, V> extends Configurable {
      * This is called from {@link org.apache.kafka.clients.producer.KafkaProducer#send(ProducerRecord)} and
      * {@link org.apache.kafka.clients.producer.KafkaProducer#send(ProducerRecord, Callback)} methods, before key and value
      * get serialized and partition is assigned (if partition is not specified in ProducerRecord).
+     * 该方法在消息被发送之前被调用，
      * <p>
      * This method is allowed to modify the record, in which case, the new record will be returned. The implication of modifying
      * key/value is that partition assignment (if not specified in ProducerRecord) will be done based on modified key/value,
@@ -69,6 +70,7 @@ public interface ProducerInterceptor<K, V> extends Configurable {
     /**
      * This method is called when the record sent to the server has been acknowledged, or when sending the record fails before
      * it gets sent to the server.
+     * 该方法在发送到服务端的消息被确认之后或者消息发送到服务器之前失败时被调用
      * <p>
      * This method is generally called just before the user callback is called, and in additional cases when <code>KafkaProducer.send()</code>
      * throws an exception.

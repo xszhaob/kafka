@@ -323,6 +323,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                   KafkaClient kafkaClient,
                   ProducerInterceptors<K, V> interceptors,
                   Time time) {
+        // 在里面传入了默认的config配置
         ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(configs, keySerializer,
                 valueSerializer));
         try {

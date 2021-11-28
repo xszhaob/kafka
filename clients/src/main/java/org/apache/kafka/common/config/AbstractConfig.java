@@ -105,6 +105,7 @@ public class AbstractConfig {
                 throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
 
         this.originals = resolveConfigVariables(configProviderProps, (Map<String, Object>) originals);
+        // 使用用户自定义配置覆盖默认配置
         this.values = definition.parse(this.originals);
         this.used = Collections.synchronizedSet(new HashSet<>());
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));

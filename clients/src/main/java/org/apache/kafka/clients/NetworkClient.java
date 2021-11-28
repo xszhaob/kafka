@@ -524,7 +524,7 @@ public class NetworkClient implements KafkaClient {
         // 把发送中请求加入到发送中请求队列中
         // 记录发送中的请求主要是为了做最大发送中请求数量的限制
         this.inFlightRequests.add(inFlightRequest);
-        // 把send请求加入到kafkaChannel中
+        // 把send请求加入到kafkaChannel中，注册写事件
         selector.send(send);
     }
 
@@ -664,6 +664,8 @@ public class NetworkClient implements KafkaClient {
      * connection if all existing connections are in use. This method will never choose a node for which there is no
      * existing connection and from which we have disconnected within the reconnect backoff period, or an active
      * connection which is being throttled.
+     *
+     * 选择负载最小的Node作为请求元数据的node，这里负载最小的计算依据是inFlightRequests中等待确认结果的消息请求量最小的Node。
      *
      * @return The node with the fewest in-flight requests.
      */
@@ -1032,6 +1034,7 @@ public class NetworkClient implements KafkaClient {
 
             // Beware that the behavior of this method and the computation of timeouts for poll() are
             // highly dependent on the behavior of leastLoadedNode.
+            // 找到负载最小的Node用来作为发送元数据请求的目标broker
             Node node = leastLoadedNode(now);
             if (node == null) {
                 log.debug("Give up sending metadata request since no node is available");
@@ -1136,6 +1139,7 @@ public class NetworkClient implements KafkaClient {
                 Metadata.MetadataRequestAndVersion requestAndVersion = metadata.newMetadataRequestAndVersion(now);
                 MetadataRequest.Builder metadataRequest = requestAndVersion.requestBuilder;
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node);
+                // 发送请求元数据的请求
                 sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now);
                 inProgress = new InProgressData(requestAndVersion.requestVersion, requestAndVersion.isPartialUpdate);
                 return defaultRequestTimeoutMs;

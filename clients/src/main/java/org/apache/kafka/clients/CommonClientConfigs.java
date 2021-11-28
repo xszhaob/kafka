@@ -35,6 +35,11 @@ public class CommonClientConfigs {
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
      */
 
+    /**
+     * 用来指定生产者客户端连接Kafka集群所需的broker地址清单，具体格式为host1:port1,host2:port2。
+     * 这里并非需要所有的broker地址，因为生产者会从给定的broker里查找到其他broker的信息。
+     * 不过建立至少要设置两个及以上的broker地址信息，当其中一个宕机时，生产者仍可以连到Kafka集群上。
+     */
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
     public static final String BOOTSTRAP_SERVERS_DOC = "A list of host/port pairs to use for establishing the initial connection to the Kafka cluster. The client will make use of all servers irrespective of which servers are specified here for bootstrapping&mdash;this list only impacts the initial hosts used to discover the full set of servers. This list should be in the form "
                                                        + "<code>host1:port1,host2:port2,...</code>. Since these servers are just used for the initial connection to "

@@ -182,6 +182,8 @@ libs += [
   scalatest: "org.scalatest:scalatest_$versions.baseScala:$versions.scalatest",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
   slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
+  // 解决不打印日志的问题
+  slf4jsimple: "org.slf4j:slf4j-simple:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",

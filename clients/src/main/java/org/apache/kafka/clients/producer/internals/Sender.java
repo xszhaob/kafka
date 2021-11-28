@@ -337,6 +337,7 @@ public class Sender implements Runnable {
 
         //
         long pollTimeout = sendProducerData(currentTimeMs);
+        // 除了正常的消息发送之外，还组织和发送了元数据请求
         client.poll(pollTimeout, currentTimeMs);
     }
 

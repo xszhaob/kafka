@@ -111,6 +111,11 @@ class KafkaController(val config: KafkaConfig,
   private val isrChangeNotificationHandler = new IsrChangeNotificationHandler(eventManager)
   private val logDirEventNotificationHandler = new LogDirEventNotificationHandler(eventManager)
 
+  /**
+   * 在Kafka集群中会有一个或多个broker,其中有一个broker会被选举为控制器(Kafka Controller),
+   * 它负责管理整个集群中所有分区和副本的状态。
+   * 每个broker都会在内存中用<code>activeControllerId</code>保存当前控制器的brokerId.
+   */
   @volatile private var activeControllerId = -1
   @volatile private var offlinePartitionCount = 0
   @volatile private var preferredReplicaImbalanceCount = 0

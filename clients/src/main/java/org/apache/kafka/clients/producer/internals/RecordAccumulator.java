@@ -59,6 +59,7 @@ import org.slf4j.Logger;
 /**
  * This class acts as a queue that accumulates records into {@link MemoryRecords}
  * instances to be sent to the server.
+ * RecordAccumulator主要用来缓存消息以便Sender线程可以批量发送，进而减少网络传输的资源消耗以提升性能。
  * <p>
  * The accumulator uses a bounded amount of memory and append calls will block when that memory is exhausted, unless
  * this behavior is explicitly disabled.
